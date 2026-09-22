@@ -103,6 +103,7 @@ def query_gold_view(tenant_id: str, view_name: str, limit: int = 100) -> list[di
     allowed_views = {
         "vw_call_intelligence",
         "vw_csr_performance",
+        "vw_csr_performance_coaching",
         "vw_lost_opportunity",
         "vw_service_benchmarks",
     }
