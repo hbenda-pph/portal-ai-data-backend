@@ -7,6 +7,7 @@ substitutions:
   _AR_REPO: portal
   _SERVICE: portal-backend
   _COMPUTE_PROJECT: platform-partners-des
+  _RUNTIME_SA: etl-servicetitan@platform-partners-des.iam.gserviceaccount.com
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -67,7 +68,7 @@ steps:
       - --platform
       - managed
       - --service-account
-      - portal-backend@${_COMPUTE_PROJECT}.iam.gserviceaccount.com
+      - ${_RUNTIME_SA}
       - --allow-unauthenticated
       - --port
       - "8080"

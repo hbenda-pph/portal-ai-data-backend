@@ -1,14 +1,50 @@
 #!/usr/bin/env bash
 # Una sola vez en Cloud Shell, desde la raíz de este repo (carpeta backend/).
 # Compute: platform-partners-des | Datos: pph-central + tenants
+#
+# Dataset IAM (bq add-iam-policy-binding) no está allowlisted en esta org.
+# Se usa ACL clásica del dataset: role READER + userByEmail de la SA.
 set -euo pipefail
 
 COMPUTE_PROJECT="platform-partners-des"
 DATA_CENTRAL="pph-central"
 REGION="us-central1"
 AR_REPO="portal"
-SA_NAME="portal-backend"
-SA_EMAIL="${SA_NAME}@${COMPUTE_PROJECT}.iam.gserviceaccount.com"
+SA_EMAIL="etl-servicetitan@${COMPUTE_PROJECT}.iam.gserviceaccount.com"
+
+grant_dataset_reader() {
+  local dataset="$1"
+  python3 - "${dataset}" "${SA_EMAIL}" <<'PY'
+import json
+import os
+import subprocess
+import sys
+import tempfile
+
+dataset, email = sys.argv[1], sys.argv[2]
+raw = subprocess.check_output(
+    ["bq", "show", "--format=prettyjson", dataset], text=True
+)
+ds = json.loads(raw)
+access = ds.get("access") or []
+if any(
+    e.get("userByEmail") == email and e.get("role") in ("READER", "WRITER", "OWNER")
+    for e in access
+):
+    print(f"ACL ya existe: {dataset}")
+    sys.exit(0)
+access.append({"role": "READER", "userByEmail": email})
+ds["access"] = access
+fd, path = tempfile.mkstemp(suffix=".json")
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        json.dump(ds, fh)
+    subprocess.check_call(["bq", "update", "--source", path, dataset])
+finally:
+    os.remove(path)
+print(f"ACL READER: {dataset} -> {email}")
+PY
+}
 
 gcloud config set project "${COMPUTE_PROJECT}"
 
@@ -27,8 +63,8 @@ if ! gcloud artifacts repositories describe "${AR_REPO}" --location="${REGION}" 
 fi
 
 if ! gcloud iam service-accounts describe "${SA_EMAIL}" >/dev/null 2>&1; then
-  gcloud iam service-accounts create "${SA_NAME}" \
-    --display-name="Portal Analítico Backend (Cloud Run)"
+  echo "No existe la cuenta de servicio ${SA_EMAIL}" >&2
+  exit 1
 fi
 
 gcloud projects add-iam-policy-binding "${COMPUTE_PROJECT}" \
@@ -36,10 +72,7 @@ gcloud projects add-iam-policy-binding "${COMPUTE_PROJECT}" \
   --role="roles/bigquery.jobUser" \
   --condition=None
 
-bq add-iam-policy-binding \
-  --member="serviceAccount:${SA_EMAIL}" \
-  --role="roles/bigquery.dataViewer" \
-  "${DATA_CENTRAL}:settings"
+grant_dataset_reader "${DATA_CENTRAL}:settings"
 
 mapfile -t TENANTS < <(
   bq query \
@@ -56,11 +89,8 @@ mapfile -t TENANTS < <(
 for TENANT in "${TENANTS[@]}"; do
   TENANT="$(echo "${TENANT}" | tr -d '\r')"
   [[ -z "${TENANT}" ]] && continue
-  echo "IAM gold: ${TENANT}"
-  bq add-iam-policy-binding \
-    --member="serviceAccount:${SA_EMAIL}" \
-    --role="roles/bigquery.dataViewer" \
-    "${TENANT}:gold"
+  echo "ACL gold: ${TENANT}"
+  grant_dataset_reader "${TENANT}:gold"
 done
 
 PROJECT_NUMBER="$(gcloud projects describe "${COMPUTE_PROJECT}" --format='value(projectNumber)')"
