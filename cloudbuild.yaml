@@ -25,8 +25,8 @@ steps:
     args:
       - -c
       - |
-        if [ "$$PROJECT_ID" != "$_COMPUTE_PROJECT" ]; then
-          echo "Este pipeline solo se ejecuta en $_COMPUTE_PROJECT (recibido: $$PROJECT_ID)" >&2
+        if [ "${PROJECT_ID}" != "${_COMPUTE_PROJECT}" ]; then
+          echo "Este pipeline solo se ejecuta en ${_COMPUTE_PROJECT} (recibido: ${PROJECT_ID})" >&2
           exit 1
         fi
 
