@@ -94,21 +94,29 @@ for TENANT in "${TENANTS[@]}"; do
 done
 
 PROJECT_NUMBER="$(gcloud projects describe "${COMPUTE_PROJECT}" --format='value(projectNumber)')"
-CB_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
 
-gcloud projects add-iam-policy-binding "${COMPUTE_PROJECT}" \
-  --member="serviceAccount:${CB_SA}" \
-  --role="roles/run.admin" \
-  --condition=None
+# Los builds nuevos usan la SA de Compute Engine; los proyectos antiguos, la legacy de Cloud Build.
+BUILD_SAS=(
+  "${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+  "${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
+)
 
-gcloud projects add-iam-policy-binding "${COMPUTE_PROJECT}" \
-  --member="serviceAccount:${CB_SA}" \
-  --role="roles/artifactregistry.writer" \
-  --condition=None
+for CB_SA in "${BUILD_SAS[@]}"; do
+  gcloud iam service-accounts describe "${CB_SA}" >/dev/null 2>&1 || continue
+  echo "IAM Cloud Build: ${CB_SA}"
 
-gcloud iam service-accounts add-iam-policy-binding "${SA_EMAIL}" \
-  --member="serviceAccount:${CB_SA}" \
-  --role="roles/iam.serviceAccountUser"
+  for ROLE in roles/run.admin roles/artifactregistry.writer roles/logging.logWriter; do
+    gcloud projects add-iam-policy-binding "${COMPUTE_PROJECT}" \
+      --member="serviceAccount:${CB_SA}" \
+      --role="${ROLE}" \
+      --condition=None >/dev/null
+  done
+
+  # Necesario para desplegar Cloud Run con la identidad de runtime.
+  gcloud iam service-accounts add-iam-policy-binding "${SA_EMAIL}" \
+    --member="serviceAccount:${CB_SA}" \
+    --role="roles/iam.serviceAccountUser" >/dev/null
+done
 
 echo
 echo "Bootstrap listo. Desde esta carpeta (backend/):"
