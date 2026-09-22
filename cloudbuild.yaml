@@ -1,0 +1,87 @@
+# Build + push Artifact Registry + deploy Cloud Run.
+# Este archivo vive en la raíz del repo Git de backend/.
+# Uso (Cloud Shell, dentro de backend/): gcloud builds submit --config cloudbuild.yaml --project platform-partners-des
+
+substitutions:
+  _REGION: us-central1
+  _AR_REPO: portal
+  _SERVICE: portal-backend
+  _COMPUTE_PROJECT: platform-partners-des
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1200s
+
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:${SHORT_SHA}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:latest
+
+steps:
+  - id: assert-compute-project
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        if [ "$$PROJECT_ID" != "$_COMPUTE_PROJECT" ]; then
+          echo "Este pipeline solo se ejecuta en $_COMPUTE_PROJECT (recibido: $$PROJECT_ID)" >&2
+          exit 1
+        fi
+
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:${SHORT_SHA}
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:latest
+      - .
+
+  - id: push-sha
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:${SHORT_SHA}
+
+  - id: push-latest
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:latest
+
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --project
+      - ${_COMPUTE_PROJECT}
+      - --image
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:${SHORT_SHA}
+      - --region
+      - ${_REGION}
+      - --platform
+      - managed
+      - --service-account
+      - portal-backend@${_COMPUTE_PROJECT}.iam.gserviceaccount.com
+      - --allow-unauthenticated
+      - --port
+      - "8080"
+      - --memory
+      - 1Gi
+      - --cpu
+      - "1"
+      - --timeout
+      - "60s"
+      - --concurrency
+      - "80"
+      - --min-instances
+      - "0"
+      - --max-instances
+      - "10"
+      - --set-env-vars
+      - PYTHONUNBUFFERED=1,GOOGLE_CLOUD_PROJECT=${_COMPUTE_PROJECT}
