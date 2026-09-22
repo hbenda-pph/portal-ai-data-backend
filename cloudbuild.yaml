@@ -1,11 +1,10 @@
 # Build + push Artifact Registry + deploy Cloud Run.
-# Este archivo vive en la raíz del repo Git de backend/.
-# Uso (Cloud Shell, dentro de backend/): gcloud builds submit --config cloudbuild.yaml --project platform-partners-des
+# Nombre canónico = repo Git: portal-ai-data-backend (AR + imagen + Cloud Run).
+# Uso (Cloud Shell, backend/): gcloud builds submit --config cloudbuild.yaml --project platform-partners-des
 
 substitutions:
   _REGION: us-central1
-  _AR_REPO: portal
-  _SERVICE: portal-backend
+  _APP: portal-ai-data-backend
   _COMPUTE_PROJECT: platform-partners-des
   _RUNTIME_SA: etl-servicetitan@platform-partners-des.iam.gserviceaccount.com
 
@@ -14,9 +13,10 @@ options:
 
 timeout: 1200s
 
+# Tag único: BUILD_ID (siempre existe). SHORT_SHA está vacío en `gcloud builds submit` sin trigger Git.
 images:
-  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:${SHORT_SHA}
-  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:latest
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_APP}/${_APP}:${BUILD_ID}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_APP}/${_APP}:latest
 
 steps:
   - id: assert-compute-project
@@ -35,22 +35,22 @@ steps:
     args:
       - build
       - -t
-      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:${SHORT_SHA}
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_APP}/${_APP}:${BUILD_ID}
       - -t
-      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:latest
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_APP}/${_APP}:latest
       - .
 
-  - id: push-sha
+  - id: push-build
     name: gcr.io/cloud-builders/docker
     args:
       - push
-      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:${SHORT_SHA}
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_APP}/${_APP}:${BUILD_ID}
 
   - id: push-latest
     name: gcr.io/cloud-builders/docker
     args:
       - push
-      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:latest
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_APP}/${_APP}:latest
 
   - id: deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -58,11 +58,11 @@ steps:
     args:
       - run
       - deploy
-      - ${_SERVICE}
+      - ${_APP}
       - --project
       - ${_COMPUTE_PROJECT}
       - --image
-      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:${SHORT_SHA}
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_APP}/${_APP}:${BUILD_ID}
       - --region
       - ${_REGION}
       - --platform

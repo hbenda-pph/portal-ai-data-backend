@@ -38,18 +38,18 @@ def configure_logging() -> None:
 
 
 configure_logging()
-log = structlog.get_logger("portal")
+log = structlog.get_logger("portal-ai-data-backend")
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    log.info("startup", service="portal-backend")
+    log.info("startup", service="portal-ai-data-backend")
     yield
-    log.info("shutdown", service="portal-backend")
+    log.info("shutdown", service="portal-ai-data-backend")
 
 
 app = FastAPI(
-    title="Portal Analítico Ejecutivo",
+    title="portal-ai-data-backend",
     version="0.1.0",
     lifespan=lifespan,
 )

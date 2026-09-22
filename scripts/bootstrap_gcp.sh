@@ -8,8 +8,8 @@ set -euo pipefail
 
 COMPUTE_PROJECT="platform-partners-des"
 DATA_CENTRAL="pph-central"
+APP="portal-ai-data-backend"
 REGION="us-central1"
-AR_REPO="portal"
 SA_EMAIL="etl-servicetitan@${COMPUTE_PROJECT}.iam.gserviceaccount.com"
 
 grant_dataset_reader() {
@@ -55,11 +55,11 @@ gcloud services enable \
   bigquery.googleapis.com \
   iam.googleapis.com
 
-if ! gcloud artifacts repositories describe "${AR_REPO}" --location="${REGION}" >/dev/null 2>&1; then
-  gcloud artifacts repositories create "${AR_REPO}" \
+if ! gcloud artifacts repositories describe "${APP}" --location="${REGION}" >/dev/null 2>&1; then
+  gcloud artifacts repositories create "${APP}" \
     --repository-format=docker \
     --location="${REGION}" \
-    --description="Imágenes Cloud Run del Portal Analítico"
+    --description="Imágenes Cloud Run de ${APP}"
 fi
 
 if ! gcloud iam service-accounts describe "${SA_EMAIL}" >/dev/null 2>&1; then
